@@ -1,6 +1,8 @@
-### 📘 `read_data_dict()`
+### 📘 `read_rc_data_dict()`
 
 This function exports the **full REDCap Data Dictionary** for a specified database and **matches it to a given dataset**, producing a cleaned and tailored data dictionary. It handles standard variables and properly expands checkbox variables into their individual components.
+
+#### 💡 Link to Code: https://github.com/NUMesCtrData/Read-Clean-REDCap-Data-Dictionary/blob/main/read_rc_data_dict
 
 ---
 
@@ -16,7 +18,7 @@ This function exports the **full REDCap Data Dictionary** for a specified databa
 #### ⚙️ Usage
 
 ```r
-read_data_dict(data, token)
+read_rc_data_dict(data, token)
 ```
 
 - `data`: A data frame containing REDCap-exported data.
@@ -27,7 +29,7 @@ read_data_dict(data, token)
 #### ✅ Example
 
 ```r
-read_data_dict(df, contact_token)
+read_rc_data_dict(df, contact_token)
 ```
 
 ---
