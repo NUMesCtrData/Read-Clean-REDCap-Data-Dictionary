@@ -1,0 +1,104 @@
+# Add Labels and Data Dictionary: ----
+
+# This function pulls the full data dictionary from a specified database and
+# then matches the data dictionary with a specified dataset, resulting in a 
+# data dicitionary tailored to the dataset. 
+
+# Useing the function:
+
+# Call the data_dict() function and specify a dataset and the API token
+# from a database from which to obtain the data dictionary. Use the above 
+# defined token_names
+
+# Ex. data_dict(df, contact_token)
+read_rc_data_dict <- function(data, token){
+  # Export Data Dictionary from REDCap
+  formData <- list("token"=token,
+                   content='metadata',
+                   format='csv',
+                   returnFormat='csv'
+  )
+  response <- httr::POST(url, body = formData, encode = "form")
+  data_dictionary <- httr::content(response, col_types = cols(.default = "c")) %>%
+    # remove checkbox suffixes from column names in "data" then filter only
+    # those column names
+    filter(field_name %in% str_replace(colnames(data), "___.*", ""))
+  
+  
+  # Clean the data dictionary
+  dd <- data_dictionary %>%
+    select(1:6,12) %>%
+    dplyr::rename(response_options=6) %>%
+    dplyr::rename(branching_logic=7) %>%
+    mutate_all(as.character()) %>%
+    mutate(response_options= case_when(
+      field_type=="yesno" ~ "1, Yes | 0, No",
+      field_type=="text" ~ "Text Box",
+      field_type=="notes" ~ "Text Box",
+      TRUE ~ response_options)) %>%
+    mutate(field_label= case_when(
+      field_name=="global_id" ~ "Participant Global Mesulam Center ID",
+      field_name=="nacc_id" ~ "Participant NACC ID",
+      TRUE ~ field_label)) %>%
+    mutate_all(~str_replace_all(., "<.*?>", "")) %>%
+    mutate(index = row_number()) %>%
+    mutate(index_checkboxes="") %>%
+    mutate(checkbox_labels="")
+  
+  # The special case of checkboxes:
+  # Check boxes are exported from REDCap as one column per checkbox response
+  # option, but in the data dictionary there is only one variable for all exported
+  # checkbox columns
+
+  # Example: checkbox varible race: select one, "1 = Black, 2 = White,  3 = Asian
+  # The Data Dictionary from REDCap will only have one race variable, 
+  # but the exported data will have 3: race___1, race___2, and race___3
+  # The variables are always named by [parent_variable___response_value]
+
+  # The below code adds these extra variables back into the data dictionary
+  
+  # Create data set of only checkboxes
+  checkboxes <- dd %>%
+    filter(field_type=="checkbox")
+  
+  # Remove checkboxes from the parent dataset. 
+  dd <- dd %>%
+    filter(field_type!="checkbox")
+  
+  if(nrow(checkboxes)>0){
+    # Create for loop, looping through each checkbox to create all variables and add 
+    # them to the parent dataset
+    for (x in 1:nrow(checkboxes)){
+      response_values <- checkboxes$response_options[x] 
+      response_values <- as.vector(strsplit(response_values, split = "\\| "))
+      response_values <- tolower(str_replace(response_values[[1]], ",.*", ""))
+      field_name <- paste(checkboxes$field_name[x], response_values, sep="___")
+      
+      field_label <- checkboxes$response_options[x]
+      field_label <- as.vector(strsplit(field_label, split = "\\| "))
+      field_label <- str_replace(field_label[[1]], ".*?,", "")
+      field_label <- trimws(field_label, which = c("both"), whitespace = "[ \t\r\n]")
+      
+      expanded_variables <<- data.frame(field_name, field_label) %>%
+        mutate(form_name=checkboxes$form_name[x]) %>%
+        mutate(section_header=checkboxes$section_header[x]) %>%
+        mutate(field_type=checkboxes$field_type[x]) %>%
+        mutate(checkbox_labels = field_label) %>%
+        mutate(field_label=paste(checkboxes$field_label[x], field_label, sep=": ")) %>%
+        mutate(response_options="1, Checked | 0, Not Checked") %>%
+        mutate(branching_logic=checkboxes$branching_logic[x]) %>%
+        mutate(index=checkboxes$index[x]) %>%
+        mutate(index_checkboxes=row_number())
+      
+      dd <- rbind(dd, expanded_variables)
+    }
+  }
+  
+  
+  # Re-order the dataset so that the new checkbox variables replace the old 
+  # checkbox variables. 
+  data_dict <<- dd %>%
+    arrange(index, index_checkboxes)  %>%
+    select(-index, -index_checkboxes)
+  
+}
